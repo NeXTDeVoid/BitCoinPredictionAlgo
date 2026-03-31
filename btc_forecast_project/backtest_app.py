@@ -57,8 +57,7 @@ app.layout = html.Div([
     html.Pre(id="info", style={"marginBottom": "20px"}),
 
     html.Div([
-        dcc.Graph(id="pred-chart", style={"width": "49%", "display": "inline-block"}),
-        dcc.Graph(id="actual-chart", style={"width": "49%", "display": "inline-block"}),
+        dcc.Graph(id="comparison-chart")
     ])
 ])
 
@@ -74,8 +73,7 @@ def pick_random_index(n_clicks):
 
 @app.callback(
     Output("info", "children"),
-    Output("pred-chart", "figure"),
-    Output("actual-chart", "figure"),
+    Output("comparison-chart", "figure"),
     Input("run-btn", "n_clicks"),
     State("index", "value")
 )
@@ -91,6 +89,8 @@ def run_backtest(n_clicks, index):
 
     row = df_feat.iloc[index]
     X = row.drop(["timestamp", "dt"]).values.reshape(1, -1)
+    print("INFERENCE FEATURE COUNT:", X.shape[1])
+    print("MODEL EXPECTED FEATURES:", getattr(model.estimators_[0], "n_features_in_", "unknown"))
     pred_rel = model.predict(X)[0]
     anchor_close = float(row["close"])
     pred = anchor_close * (1.0 + pred_rel)
@@ -102,74 +102,44 @@ def run_backtest(n_clicks, index):
     pred_times = future_real["dt"].tolist()
 
     # =========================
-    # Left chart: history + prediction
+    # Single comparison chart
     # =========================
-    fig_pred = go.Figure()
+    fig = go.Figure()
 
-    fig_pred.add_trace(go.Scatter(
+    fig.add_trace(go.Scatter(
         x=history["dt"],
         y=history["close"],
         mode="lines",
         name="history"
     ))
 
-    y_min_pred = min(history["close"].min(), pred.min())
-    y_max_pred = max(history["close"].max(), pred.max())
+    y_min = min(history["close"].min(), pred.min(), future_real["close"].min())
+    y_max = max(history["close"].max(), pred.max(), future_real["close"].max())
 
-    fig_pred.add_trace(go.Scatter(
+    fig.add_trace(go.Scatter(
         x=[divider_time, divider_time],
-        y=[y_min_pred, y_max_pred],
+        y=[y_min, y_max],
         mode="lines",
         name="prediction start",
         line=dict(dash="dash")
     ))
 
-    fig_pred.add_trace(go.Scatter(
+    fig.add_trace(go.Scatter(
         x=pred_times,
         y=pred,
         mode="lines",
         name="prediction"
     ))
 
-    fig_pred.update_layout(
-        title="Prediction",
-        xaxis_title="Time",
-        yaxis_title="Price",
-        template="plotly_dark"
-    )
-
-    # =========================
-    # Right chart: history + actual
-    # =========================
-    fig_actual = go.Figure()
-
-    fig_actual.add_trace(go.Scatter(
-        x=history["dt"],
-        y=history["close"],
-        mode="lines",
-        name="history"
-    ))
-
-    y_min_act = min(history["close"].min(), future_real["close"].min())
-    y_max_act = max(history["close"].max(), future_real["close"].max())
-
-    fig_actual.add_trace(go.Scatter(
-        x=[divider_time, divider_time],
-        y=[y_min_act, y_max_act],
-        mode="lines",
-        name="actual start",
-        line=dict(dash="dash")
-    ))
-
-    fig_actual.add_trace(go.Scatter(
+    fig.add_trace(go.Scatter(
         x=future_real["dt"],
         y=future_real["close"],
         mode="lines",
         name="actual"
     ))
 
-    fig_actual.update_layout(
-        title="Actual Future",
+    fig.update_layout(
+        title="Prediction vs Actual",
         xaxis_title="Time",
         yaxis_title="Price",
         template="plotly_dark"
@@ -201,7 +171,7 @@ def run_backtest(n_clicks, index):
         f"Directional accuracy: {direction_acc:.2%}"
     )
 
-    return info, fig_pred, fig_actual
+    return info, fig
 
 
 if __name__ == "__main__":
