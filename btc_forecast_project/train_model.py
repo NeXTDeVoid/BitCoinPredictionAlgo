@@ -20,6 +20,7 @@ STEP = 100
 
 def composite_score(pred, real):
     mae = np.mean(np.abs(pred - real))
+    mae_score = 1.0 / (1.0 + mae)
 
     direction = np.mean(
         np.sign(pred[:, 1:] - pred[:, :-1]) ==
@@ -28,13 +29,11 @@ def composite_score(pred, real):
 
     pred_diff = pred[:, 1:] - pred[:, :-1]
     real_diff = real[:, 1:] - real[:, :-1]
-
     movement_match = np.mean(np.abs(pred_diff - real_diff))
-    movement_score = 1 / (1 + movement_match)
+    movement_score = 1.0 / (1.0 + movement_match)
 
-    score = 0.7 * movement_score + 0.3 * direction
+    score = 0.50 * movement_score + 0.30 * direction + 0.20 * mae_score
     return score
-
 
 def load_best_score():
     if os.path.exists(META_PATH):
@@ -59,6 +58,9 @@ def train():
     df = build_features(df)
 
     X = df.drop(columns=["timestamp"])
+    print("TRAIN FEATURE COUNT:", X.shape[1])
+    print("TRAIN FEATURES:")
+    print(list(X.columns))
     y = build_targets(df)
 
     X = X.iloc[:-48]
